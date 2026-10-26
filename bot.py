@@ -1,8 +1,9 @@
 """A Pipecat voice agent on OpenAI's Realtime API, with a Simli Trinity-2 avatar as its face.
 
-Run it with `uv run bot.py` and open http://localhost:7860. Pipecat's runner serves a
-browser client and connects it to the bot over WebRTC; the bot talks through OpenAI and Simli
-turns its voice into lip-synced avatar video.
+Run it with `uv run bot.py`, then start the page in frontend/ (see the README) and open
+http://localhost:3000. Pipecat's runner connects the page to the bot over WebRTC, and also serves
+its own prebuilt client at http://localhost:7860. The bot talks through OpenAI and Simli turns
+its voice into lip-synced avatar video.
 """
 
 import os

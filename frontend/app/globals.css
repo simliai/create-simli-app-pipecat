@@ -1,0 +1,11 @@
+@import "tailwindcss";
+
+/* Simli's colours, fonts and loader, from create-simli-app. */
+@theme inline {
+  --color-simliblue: #0000ff;
+  --color-simligray: #111111;
+  --color-red: #ff0000;
+  --font-abc-repro: var(--font-repro);
+  --font-abc-repro-mono: var(--font-repro-mono);
+  --animate-loader: spin 5s linear infinite;
+}
