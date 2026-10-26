@@ -1,0 +1,18 @@
+[project]
+name = "create-simli-app-pipecat"
+version = "1.0.0"
+description = "A Pipecat voice agent on OpenAI's Realtime API with a Simli Trinity-2 avatar"
+requires-python = ">=3.11"
+dependencies = [
+    "pipecat-ai[openai,runner,simli,webrtc]==1.14.0",
+    "python-dotenv>=1.0",
+]
+
+[dependency-groups]
+dev = ["ruff>=0.15"]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
