@@ -46,8 +46,8 @@ Prefer pip? `pip install "pipecat-ai[openai,runner,simli,webrtc]==1.16.0" python
 
 Everything about the agent is at the top of [`bot.py`](bot.py):
 
-- **Face:** any Trinity-2 face ID. Pick a [preset](https://docs.simli.com/api-reference/preset-faces) or [make your own from a photo](https://app.simli.com). Or set `SIMLI_FACE_ID`.
-- **Voice:** any OpenAI Realtime voice (the list is in the file). Or set `OPENAI_VOICE`.
+- **Face:** any Trinity-2 face ID. The default is Simli's default Trinity-2 face (`14c60d62-6ebf-424d-b626-1f4f91c33b04`). Pick a [preset](https://docs.simli.com/api-reference/preset-faces) or [make your own from a photo](https://app.simli.com). Or set `SIMLI_FACE_ID`.
+- **Voice:** any OpenAI Realtime voice (the list is in the file). Or set `OPENAI_VOICE`. Match the voice to the face: the default face is a woman, and the default voice, `marin`, is a female voice.
 - **Prompt and greeting.**
 - **Session limits:** `MAX_SESSION_SECONDS` (10 minutes) and `MAX_IDLE_SECONDS` (2 minutes). Simli's avatar leaves at these limits, and the bot then ends the whole conversation, OpenAI included.
 - **Framing:** the video is 16:9 (1366x768). 1:1 and 9:16 work too, and `avatar_position_x` / `avatar_position_y` move the avatar on the canvas. See [Framing the video](https://docs.simli.com/api-reference/trinity-2#framing-the-video).

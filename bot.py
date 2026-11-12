@@ -32,19 +32,20 @@ from pipecat.workers.runner import WorkerRunner
 load_dotenv(Path(__file__).parent / ".env", override=True)
 
 # Any Trinity-2 face: a preset from https://docs.simli.com/api-reference/preset-faces,
-# or your own from https://app.simli.com. This one is Anna.
-FACE_ID = os.getenv("SIMLI_FACE_ID") or "bf13113a-355a-4d97-8b90-4edccd1da7b2"
+# or your own from https://app.simli.com. This is Simli's default Trinity-2 face, a woman.
+FACE_ID = os.getenv("SIMLI_FACE_ID") or "14c60d62-6ebf-424d-b626-1f4f91c33b04"
 
 # OpenAI Realtime voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse, marin, cedar.
+# Match the voice to the face: marin is a female voice, for the default face.
 VOICE = os.getenv("OPENAI_VOICE") or "marin"
 
 # The video: 16:9 at the avatar's full height. 1:1 and 9:16 work too, each side at least 512.
 WIDTH, HEIGHT = 1366, 768
 
-INSTRUCTIONS = """You are Anna, a friendly assistant shown as a real-time video avatar made with Simli.
+INSTRUCTIONS = """You are a friendly assistant shown as a real-time video avatar made with Simli.
 Keep every answer short and conversational: one to three sentences, no lists or markdown."""
 
-FIRST_MESSAGE = "Hi, I'm Anna! I'm a real-time video avatar made with Simli. What would you like to talk about?"
+FIRST_MESSAGE = "Hi! I'm a real-time video avatar made with Simli. What would you like to talk about?"
 
 # Session limits, so a forgotten tab doesn't use up your Simli minutes and OpenAI credit. Simli's
 # avatar leaves at these limits, and the bot then ends the whole conversation, OpenAI included.
@@ -116,7 +117,7 @@ async def bot(runner_args: SmallWebRTCRunnerArguments):
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
         logger.info("Client connected")
-        await worker.queue_frames([LLMRunFrame()])  # Anna says hello first
+        await worker.queue_frames([LLMRunFrame()])  # the avatar says hello first
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
