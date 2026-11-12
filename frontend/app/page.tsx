@@ -34,20 +34,21 @@ export default function Home() {
           const element = track.kind === "video" ? videoRef.current : audioRef.current;
           if (element) element.srcObject = new MediaStream([track]);
         },
-        // Fires when we hang up, and when the bot does (e.g. after max_session_length in bot.py).
+        // Fires when we hang up, and when the bot ends the call (at MAX_SESSION_SECONDS or
+        // MAX_IDLE_SECONDS in bot.py).
         onDisconnected: () => setStatus("idle"),
       },
     });
     clientRef.current = client;
 
     try {
-      // Asks for the microphone, sends the WebRTC offer to /api/offer (next.config.ts passes it
-      // on to the bot) and resolves once the bot says it's ready.
+      // Asks for the microphone, sends the WebRTC offer to /api/offer (app/api/offer/route.ts
+      // passes it on to the bot) and resolves once the bot says it's ready.
       await client.connect({ webrtcRequestParams: { endpoint: "/api/offer" } });
       setStatus("live");
     } catch (e) {
       console.error(e);
-      setError("Couldn't connect. Is the bot running (uv run bot.py), and is the microphone allowed?");
+      setError("Couldn't connect. Is the bot running (uv run bot.py -t webrtc), and is the microphone allowed?");
       await client.disconnect();
       setStatus("idle");
     }
@@ -97,7 +98,7 @@ export default function Home() {
         </span>
         <ul className="mt-2 ml-[6px] max-w-[350px] list-inside list-decimal">
           <li className="mb-1">Put your Simli and OpenAI API keys in the .env file next to bot.py.</li>
-          <li className="mb-1">Run the bot with uv run bot.py, press Start and talk to the avatar.</li>
+          <li className="mb-1">Run the bot with uv run bot.py -t webrtc, press Start and talk to the avatar.</li>
           <li className="mb-1">Change the face, voice and prompt at the top of bot.py.</li>
         </ul>
         <span className="mt-[16px]">

@@ -1,11 +1,15 @@
 """A Pipecat voice agent on OpenAI's Realtime API, with a Simli Trinity-2 avatar as its face.
 
-Run it with `uv run bot.py`, then start the page in frontend/ (see the README) and open
-http://localhost:3000. Pipecat's runner connects the page to the bot over WebRTC, and also serves
-its own prebuilt client at http://localhost:7860. The bot talks through OpenAI and Simli turns
-its voice into lip-synced avatar video.
+Run it with `uv run bot.py -t webrtc`, then start the page in frontend/ (see the README) and
+open http://localhost:3000. Pipecat's runner connects the page to the bot over WebRTC, and also
+serves its own prebuilt client at http://localhost:7860. The bot talks through OpenAI and Simli
+turns its voice into lip-synced avatar video.
+
+`-t webrtc` keeps the runner to the one transport this bot uses. Set PIPECAT_ALLOWED_ORIGINS in
+.env (see .env.example) so only your own pages can start sessions from a browser.
 """
 
+import asyncio
 import os
 from pathlib import Path
 
@@ -42,6 +46,11 @@ Keep every answer short and conversational: one to three sentences, no lists or 
 
 FIRST_MESSAGE = "Hi, I'm Anna! I'm a real-time video avatar made with Simli. What would you like to talk about?"
 
+# Session limits, so a forgotten tab doesn't use up your Simli minutes and OpenAI credit. Simli's
+# avatar leaves at these limits, and the bot then ends the whole conversation, OpenAI included.
+MAX_SESSION_SECONDS = 600  # the longest a conversation can last
+MAX_IDLE_SECONDS = 120  # Simli: without the avatar speaking; the bot: with nobody speaking
+
 
 async def bot(runner_args: SmallWebRTCRunnerArguments):
     """Runs one conversation. Pipecat's runner calls this for every browser that connects."""
@@ -71,8 +80,8 @@ async def bot(runner_args: SmallWebRTCRunnerArguments):
     simli = SimliVideoService(
         api_key=os.environ["SIMLI_API_KEY"],
         face_id=FACE_ID,
-        max_session_length=600,  # seconds, so a forgotten tab doesn't use up your minutes
-        max_idle_time=120,
+        max_session_length=MAX_SESSION_SECONDS,
+        max_idle_time=MAX_IDLE_SECONDS,
         # Trinity-2 framing (https://docs.simli.com/api-reference/trinity-2#framing-the-video).
         framing=SimliVideoService.Framing(
             streaming_width=WIDTH,
@@ -97,7 +106,12 @@ async def bot(runner_args: SmallWebRTCRunnerArguments):
             assistant_aggregator,
         ]
     )
-    worker = PipelineWorker(pipeline, params=PipelineParams(enable_metrics=True))
+    # The worker cancels the conversation after MAX_IDLE_SECONDS with nobody speaking, as Simli does.
+    worker = PipelineWorker(
+        pipeline,
+        params=PipelineParams(enable_metrics=True),
+        idle_timeout_secs=MAX_IDLE_SECONDS,
+    )
 
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
@@ -109,9 +123,21 @@ async def bot(runner_args: SmallWebRTCRunnerArguments):
         logger.info("Client disconnected")
         await worker.cancel()
 
-    runner = WorkerRunner(handle_sigint=runner_args.handle_sigint)
-    await runner.add_workers(worker)
-    await runner.run()
+    # Simli leaves at max_session_length but doesn't stop the pipeline, so end it here too:
+    # otherwise OpenAI would keep listening and answering with no avatar.
+    async def end_at_time_limit():
+        await asyncio.sleep(MAX_SESSION_SECONDS)
+        logger.info(f"Session reached {MAX_SESSION_SECONDS} s, ending it")
+        # Shielded, so the cleanup below can't interrupt the cancel once it has started.
+        await asyncio.shield(worker.cancel(reason="max session length"))
+
+    time_limit = asyncio.create_task(end_at_time_limit())
+    try:
+        runner = WorkerRunner(handle_sigint=runner_args.handle_sigint)
+        await runner.add_workers(worker)
+        await runner.run()
+    finally:
+        time_limit.cancel()  # in case the conversation ended first (the user left, or an error)
 
 
 if __name__ == "__main__":
