@@ -51,6 +51,7 @@ Everything about the agent is at the top of [`bot.py`](bot.py):
 - **Prompt and greeting.**
 - **Session limits:** `MAX_SESSION_SECONDS` (10 minutes) and `MAX_IDLE_SECONDS` (2 minutes). Simli's avatar leaves at these limits, and the bot then ends the whole conversation, OpenAI included.
 - **Framing:** the video is 16:9 (1366x768). 1:1 and 9:16 work too, and `avatar_position_x` / `avatar_position_y` move the avatar on the canvas. See [Framing the video](https://docs.simli.com/api-reference/trinity-2#framing-the-video).
+- **Video quality:** the bot re-encodes the avatar's video before sending it to the page. `VIDEO_BITRATE` in `bot.py` (2.5 Mbit/s) sets how much bandwidth it gets; lower it for a smaller video or slow networks.
 - **Tools, other models and more:** it's a regular Pipecat pipeline, so everything in the [Pipecat docs](https://docs.pipecat.ai) applies.
 
 The page is in [`frontend/app/page.tsx`](frontend/app/page.tsx). If the agent isn't on http://localhost:7860, set `BOT_URL` to where it is (in `frontend/.env.local`, see [`frontend/.env.example`](frontend/.env.example), or the environment). The page reads it on each request, so it doesn't need a rebuild.

@@ -13,6 +13,8 @@ import asyncio
 import os
 from pathlib import Path
 
+import aiortc.codecs.h264
+import aiortc.codecs.vpx
 from dotenv import load_dotenv
 from loguru import logger
 from pipecat.frames.frames import LLMRunFrame
@@ -41,6 +43,16 @@ VOICE = os.getenv("OPENAI_VOICE") or "marin"
 
 # The video: 16:9 at the avatar's full height. 1:1 and 9:16 work too, each side at least 512.
 WIDTH, HEIGHT = 1366, 768
+
+# The bot re-encodes Simli's video before sending it to the browser, and aiortc (the WebRTC library
+# Pipecat's SmallWebRTCTransport uses) starts at 0.5-1 Mbit/s with a low ceiling. That's too little
+# for 1366x768: the mouth smears and the lip sync looks off. Pipecat has no setting for it, so raise
+# aiortc's limits here. Lower it for small videos or slow networks.
+VIDEO_BITRATE = 2_500_000  # bits per second
+for _codec in (aiortc.codecs.vpx, aiortc.codecs.h264):
+    _codec.DEFAULT_BITRATE = VIDEO_BITRATE
+    _codec.MIN_BITRATE = VIDEO_BITRATE // 2
+    _codec.MAX_BITRATE = VIDEO_BITRATE * 2
 
 INSTRUCTIONS = """You are a friendly assistant shown as a real-time video avatar made with Simli.
 Keep every answer short and conversational: one to three sentences, no lists or markdown."""
