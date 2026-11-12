@@ -37,7 +37,7 @@ Then:
 
 Pipecat's prebuilt client at http://localhost:7860 still works too.
 
-Prefer pip? `pip install "pipecat-ai[openai,runner,simli,webrtc]==1.14.0" python-dotenv`, then `python bot.py` (Python 3.11 or newer).
+Prefer pip? `pip install "pipecat-ai[openai,runner,simli,webrtc]==1.16.0" python-dotenv`, then `python bot.py` (Python 3.11 or newer).
 
 ## Make it yours
 
@@ -69,3 +69,8 @@ The runner is for development. Anyone who can reach port 7860 can start a conver
 - [Simli docs](https://docs.simli.com) and [all starters](https://docs.simli.com/api-reference/samples/all-samples)
 - Source: https://github.com/simliai/create-simli-app-pipecat
 - Questions? Ask on [Discord](https://discord.gg/yQx49zNF4d).
+
+## Using a coding agent?
+
+This repo includes the [Simli agent skill](https://github.com/simliai/skills) in `.agents/skills/simli` (linked from `.claude/skills/simli`), so Claude Code, Codex, Cursor and other agents that support skills know how to change the face, framing, camera and prompt, and how to fix common errors. To add it to another project: `npx skills add simliai/skills`.
+

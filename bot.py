@@ -73,15 +73,15 @@ async def bot(runner_args: SmallWebRTCRunnerArguments):
         face_id=FACE_ID,
         max_session_length=600,  # seconds, so a forgotten tab doesn't use up your minutes
         max_idle_time=120,
-    )
-    # Trinity-2 framing (https://docs.simli.com/api-reference/trinity-2#framing-the-video).
-    # SimliVideoService has no parameters for it yet, but the Simli SDK sends every field of
-    # this config to Simli when the session starts, so we add the fields there.
-    simli._simli_client.config.__dict__.update(
-        streaming_width=WIDTH,
-        streaming_height=HEIGHT,
-        avatar_position_x=0.5,  # 0 (left) to 1 (right)
-        avatar_position_y=1.0,  # 0 (top) to 1 (bottom)
+        # Trinity-2 framing (https://docs.simli.com/api-reference/trinity-2#framing-the-video).
+        framing=SimliVideoService.Framing(
+            streaming_width=WIDTH,
+            streaming_height=HEIGHT,
+            avatar_position_x=0.5,  # 0 (left) to 1 (right)
+            avatar_position_y=1.0,  # 0 (top) to 1 (bottom)
+            # camera=SimliVideoService.Camera(zoom=1.2),  # a starting camera
+            # background_id="<upload id>",  # your own background (POST /assets/backgrounds)
+        ),
     )
 
     context = LLMContext([{"role": "developer", "content": f'Greet the user by saying: "{FIRST_MESSAGE}"'}])
