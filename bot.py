@@ -1,14 +1,20 @@
 """A Pipecat voice agent on OpenAI's Realtime API, with a Simli Trinity-2 avatar as its face.
 
-Run it with `uv run bot.py`, then start the page in frontend/ (see the README) and open
-http://localhost:3000. Pipecat's runner connects the page to the bot over WebRTC, and also serves
-its own prebuilt client at http://localhost:7860. The bot talks through OpenAI and Simli turns
-its voice into lip-synced avatar video.
+Run it with `uv run bot.py -t webrtc`, then start the page in frontend/ (see the README) and
+open http://localhost:3000. Pipecat's runner connects the page to the bot over WebRTC, and also
+serves its own prebuilt client at http://localhost:7860. The bot talks through OpenAI and Simli
+turns its voice into lip-synced avatar video.
+
+`-t webrtc` keeps the runner to the one transport this bot uses. Set PIPECAT_ALLOWED_ORIGINS in
+.env (see .env.example) so only your own pages can start sessions from a browser.
 """
 
+import asyncio
 import os
 from pathlib import Path
 
+import aiortc.codecs.h264
+import aiortc.codecs.vpx
 from dotenv import load_dotenv
 from loguru import logger
 from pipecat.frames.frames import LLMRunFrame
@@ -28,19 +34,35 @@ from pipecat.workers.runner import WorkerRunner
 load_dotenv(Path(__file__).parent / ".env", override=True)
 
 # Any Trinity-2 face: a preset from https://docs.simli.com/api-reference/preset-faces,
-# or your own from https://app.simli.com. This one is Anna.
-FACE_ID = os.getenv("SIMLI_FACE_ID") or "bf13113a-355a-4d97-8b90-4edccd1da7b2"
+# or your own from https://app.simli.com. This is Simli's default Trinity-2 face, a woman.
+FACE_ID = os.getenv("SIMLI_FACE_ID") or "14c60d62-6ebf-424d-b626-1f4f91c33b04"
 
 # OpenAI Realtime voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse, marin, cedar.
+# Match the voice to the face: marin is a female voice, for the default face.
 VOICE = os.getenv("OPENAI_VOICE") or "marin"
 
 # The video: 16:9 at the avatar's full height. 1:1 and 9:16 work too, each side at least 512.
 WIDTH, HEIGHT = 1366, 768
 
-INSTRUCTIONS = """You are Anna, a friendly assistant shown as a real-time video avatar made with Simli.
+# The bot re-encodes Simli's video before sending it to the browser, and aiortc (the WebRTC library
+# Pipecat's SmallWebRTCTransport uses) starts at 0.5-1 Mbit/s with a low ceiling. That's too little
+# for 1366x768: the mouth smears and the lip sync looks off. Pipecat has no setting for it, so raise
+# aiortc's limits here. Lower it for small videos or slow networks.
+VIDEO_BITRATE = 2_500_000  # bits per second
+for _codec in (aiortc.codecs.vpx, aiortc.codecs.h264):
+    _codec.DEFAULT_BITRATE = VIDEO_BITRATE
+    _codec.MIN_BITRATE = VIDEO_BITRATE // 2
+    _codec.MAX_BITRATE = VIDEO_BITRATE * 2
+
+INSTRUCTIONS = """You are a friendly assistant shown as a real-time video avatar made with Simli.
 Keep every answer short and conversational: one to three sentences, no lists or markdown."""
 
-FIRST_MESSAGE = "Hi, I'm Anna! I'm a real-time video avatar made with Simli. What would you like to talk about?"
+FIRST_MESSAGE = "Hi! I'm a real-time video avatar made with Simli. What would you like to talk about?"
+
+# Session limits, so a forgotten tab doesn't use up your Simli minutes and OpenAI credit. Simli's
+# avatar leaves at these limits, and the bot then ends the whole conversation, OpenAI included.
+MAX_SESSION_SECONDS = 600  # the longest a conversation can last
+MAX_IDLE_SECONDS = 120  # Simli: without the avatar speaking; the bot: with nobody speaking
 
 
 async def bot(runner_args: SmallWebRTCRunnerArguments):
@@ -71,17 +93,17 @@ async def bot(runner_args: SmallWebRTCRunnerArguments):
     simli = SimliVideoService(
         api_key=os.environ["SIMLI_API_KEY"],
         face_id=FACE_ID,
-        max_session_length=600,  # seconds, so a forgotten tab doesn't use up your minutes
-        max_idle_time=120,
-    )
-    # Trinity-2 framing (https://docs.simli.com/api-reference/trinity-2#framing-the-video).
-    # SimliVideoService has no parameters for it yet, but the Simli SDK sends every field of
-    # this config to Simli when the session starts, so we add the fields there.
-    simli._simli_client.config.__dict__.update(
-        streaming_width=WIDTH,
-        streaming_height=HEIGHT,
-        avatar_position_x=0.5,  # 0 (left) to 1 (right)
-        avatar_position_y=1.0,  # 0 (top) to 1 (bottom)
+        max_session_length=MAX_SESSION_SECONDS,
+        max_idle_time=MAX_IDLE_SECONDS,
+        # Trinity-2 framing (https://docs.simli.com/api-reference/trinity-2#framing-the-video).
+        framing=SimliVideoService.Framing(
+            streaming_width=WIDTH,
+            streaming_height=HEIGHT,
+            avatar_position_x=0.5,  # 0 (left) to 1 (right)
+            avatar_position_y=1.0,  # 0 (top) to 1 (bottom)
+            # camera=SimliVideoService.Camera(zoom=1.2),  # a starting camera
+            # background_id="<upload id>",  # your own background (POST /assets/backgrounds)
+        ),
     )
 
     context = LLMContext([{"role": "developer", "content": f'Greet the user by saying: "{FIRST_MESSAGE}"'}])
@@ -97,21 +119,38 @@ async def bot(runner_args: SmallWebRTCRunnerArguments):
             assistant_aggregator,
         ]
     )
-    worker = PipelineWorker(pipeline, params=PipelineParams(enable_metrics=True))
+    # The worker cancels the conversation after MAX_IDLE_SECONDS with nobody speaking, as Simli does.
+    worker = PipelineWorker(
+        pipeline,
+        params=PipelineParams(enable_metrics=True),
+        idle_timeout_secs=MAX_IDLE_SECONDS,
+    )
 
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
         logger.info("Client connected")
-        await worker.queue_frames([LLMRunFrame()])  # Anna says hello first
+        await worker.queue_frames([LLMRunFrame()])  # the avatar says hello first
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
         logger.info("Client disconnected")
         await worker.cancel()
 
-    runner = WorkerRunner(handle_sigint=runner_args.handle_sigint)
-    await runner.add_workers(worker)
-    await runner.run()
+    # Simli leaves at max_session_length but doesn't stop the pipeline, so end it here too:
+    # otherwise OpenAI would keep listening and answering with no avatar.
+    async def end_at_time_limit():
+        await asyncio.sleep(MAX_SESSION_SECONDS)
+        logger.info(f"Session reached {MAX_SESSION_SECONDS} s, ending it")
+        # Shielded, so the cleanup below can't interrupt the cancel once it has started.
+        await asyncio.shield(worker.cancel(reason="max session length"))
+
+    time_limit = asyncio.create_task(end_at_time_limit())
+    try:
+        runner = WorkerRunner(handle_sigint=runner_args.handle_sigint)
+        await runner.add_workers(worker)
+        await runner.run()
+    finally:
+        time_limit.cancel()  # in case the conversation ended first (the user left, or an error)
 
 
 if __name__ == "__main__":
